@@ -33,7 +33,10 @@ type Grafica = Either ParseError (Set Objeto)
 type Sesion = [Identificador]
 type Encolamiento = (Cola -> Objeto -> Cola)
 
-data Estado = Estado { stats :: (Integer,Integer,Integer), cola :: Cola, mem :: Memoria, cache :: Memoria } deriving (Show, Eq, Ord)
+-- misses, desalojos, total de bits transferidos
+type Estadisticas = (Integer, Integer, Integer)
+
+data Estado = Estado { stats :: Estadisticas, cola :: Cola, mem :: Memoria, cache :: Memoria } deriving (Show, Eq, Ord)
 
 -- Informativo
 
@@ -100,10 +103,10 @@ paso e (Right grafica) x f =
                    then e -- no pasa nada, avanza la sesión
                    else subir e (Right grafica) x f) -- caché -> memoria
 
-subiendo :: Integer -> (Integer, Integer, Integer) -> (Integer, Integer, Integer)
+subiendo :: Integer -> Estadisticas -> Estadisticas
 subiendo tam (a,b,c) = (a+1, b, c+tam)
 
-bajando :: Integer -> (Integer, Integer, Integer) -> (Integer, Integer, Integer)
+bajando :: Integer -> Estadisticas -> Estadisticas
 bajando tam (a,b,c) = (a, b+1, c+tam)
 
 -- sube un objeto del caché a memoria principal

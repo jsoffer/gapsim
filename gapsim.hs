@@ -26,14 +26,14 @@ que la sesión de entrada ya tenga esas ayudas extra para el analizador.
 
 -- Declaración de tipos
 
-data Memoria = Memoria { alloc :: (Set Objeto), memfree :: Int } deriving (Show, Eq, Ord)
+data Memoria = Memoria { alloc :: (Set Objeto), memfree :: Integer } deriving (Show, Eq, Ord)
 
 type Cola = [Objeto]
 type Grafica = Either ParseError (Set Objeto)
 type Sesion = [Identificador]
 type Encolamiento = (Cola -> Objeto -> Cola)
 
-data Estado = Estado { cola :: Cola, mem :: Memoria, cache :: Memoria } deriving (Show, Eq, Ord)
+data Estado = Estado { stats :: (Integer,Integer,Integer), cola :: Cola, mem :: Memoria, cache :: Memoria } deriving (Show, Eq, Ord)
 
 -- Informativo
 
@@ -64,7 +64,8 @@ proceso _ _ [] _ = return ()
 proceso e (Right grafica) (x:xs) f = do
     -- debug; muestra cosas, no es tan complicado como parece.
     putStrLn $ 
-        "- - -\n" ++ (show $ Sesion.nombre x) ++ " " ++ 
+        "- - -\n" ++ (show $ stats e) ++ "\n" ++
+        (show $ Sesion.nombre x) ++ " " ++ 
         (show $ tam $ vertice $ encuentra grafica  (Sesion.nombre x)) ++ "/" ++ 
         (show $ memfree $ mem e) ++ " " ++ (show (accion x)) ++ 
         (mensaje (mem e) (Sesion.nombre x)) ++ "\n" ++ 
@@ -99,18 +100,25 @@ paso e (Right grafica) x f =
                    then e -- no pasa nada, avanza la sesión
                    else subir e (Right grafica) x f) -- caché -> memoria
 
+subiendo :: Integer -> (Integer, Integer, Integer) -> (Integer, Integer, Integer)
+subiendo tam (a,b,c) = (a+1, b, c+tam)
+
+bajando :: Integer -> (Integer, Integer, Integer) -> (Integer, Integer, Integer)
+bajando tam (a,b,c) = (a, b+1, c+tam)
+
 -- sube un objeto del caché a memoria principal
 -- 
 subir :: Estado -> Grafica -> Identificador -> Encolamiento -> Estado 
 subir e (Right grafica) y f =
     if (memfree $ mem e) >= (tam $ vertice x)  
-    then Estado q m c
+    then Estado (subiendo bits (stats e)) q m c
     else paso (desalojar e) (Right grafica) y f where
         x = encuentra (alloc $ cache e) (Sesion.nombre y)
         -- si elemento == False, intentamos subir algo que no estáien caché. 
         -- Pero lo necesitamos. Salir.
         elemento = member x $ alloc $ cache e
         q = f (cola e) x -- encola con la función proporcionada
+        bits = if elemento then tam $ vertice x else 0
         m = if elemento 
             then Memoria a s 
             else error $ (show x) ++ "no en cache, no puede subir" --mem e
@@ -123,7 +131,7 @@ subir e (Right grafica) y f =
 -- A partir de un estado, devuelve otro en el que, hipotéticamente, 
 -- hay un poco más de memoria.
 desalojar :: Estado -> Estado 
-desalojar e = Estado q m c where
+desalojar e = Estado (bajando bits (stats e)) q m c where
     x = last $ cola e
     q = init $ cola e -- (cuidado con la cola vacía)
     -- si elemento == False, entonces intentamos desalojar algo que no está en memoria. 
@@ -135,6 +143,7 @@ desalojar e = Estado q m c where
     -- con ignorar. También puede ser manejado verificando que no encole algo que ya 
     -- existe (¿equivalente?).
     elemento = member x $ alloc $ mem e
+    bits = if elemento then tam $ vertice x else 0
     m = if elemento 
         then Memoria (Set.delete x $ alloc $ mem e) ((memfree $ mem e) + (tam $ vertice x)) 
         else mem e
@@ -149,7 +158,8 @@ agregar e (Right grafica) y f = let x = encuentra grafica (Sesion.nombre y) in
                 if ((memfree (mem e)) >= (tam $ vertice x)) -- si cabe
                 then
                     -- haz una memoria con el nuevo elemento
-                    Estado (f (cola e) x) 
+                    Estado (stats e)
+                           (f (cola e) x) 
                            (Memoria (Set.insert x (alloc (mem e))) 
                                     ((memfree (mem e)) - (tam $ vertice x))) 
                                     (cache e) 
@@ -181,6 +191,6 @@ main = do
         l1 = Memoria (Set.empty :: Set Objeto) 5000
     grafica <- archivo_a_grafica "datos" -- grafica :: Either ParseError (Set Objeto)
     sesion <- archivo_a_sesion "rubik.gap" -- sesion :: [Identificador]
-    resultado <- proceso (Estado [] l0 l1) grafica sesion fifo   
+    resultado <- proceso (Estado (0,0,0) [] l0 l1) grafica sesion fifo   
     --resultado <- proceso (Estado [] l0 l1) grafica sesion ordentam   
     return ()

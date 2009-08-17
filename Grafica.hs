@@ -7,7 +7,7 @@ import System.Environment
 
 -- los nombres están completamente mal. Además, el formato de salida podría mejorar.
 data Relacion = Relacion { desde :: String, hasta :: String } deriving (Show, Ord, Eq)
-data Vertice = Vertice { nombre :: String, tam :: Int } deriving (Show, Ord, Eq)
+data Vertice = Vertice { nombre :: String, tam :: Integer } deriving (Show, Ord, Eq)
 
 -- mal nombre (renombrar)
 data Objeto = Objeto { vertice :: Vertice, antecesores :: Set String } deriving (Show, Ord, Eq)

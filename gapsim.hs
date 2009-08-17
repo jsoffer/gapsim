@@ -58,9 +58,9 @@ encuentra g s = if Prelude.null xs then error $ (show s)  ++ ": no existe en gra
 
 -- Gráfica y Encolamiento son estáticos (nunca cambian); Sesión solamente avanza.
 -- Todos los cambios se almacenan en Estado.
-proceso :: Estado -> Grafica -> Sesion -> Encolamiento -> IO ()
+proceso :: Estado -> Grafica -> Sesion -> Encolamiento -> IO (Estado)
 proceso _ (Left _) _ _  = error "El parse de la gráfica ha fallado"
-proceso _ _ [] _ = return ()
+proceso e _ [] _ = return e
 proceso e (Right grafica) (x:xs) f = do
     -- debug; muestra cosas, no es tan complicado como parece.
     putStrLn $ 
@@ -73,7 +73,7 @@ proceso e (Right grafica) (x:xs) f = do
         ("cache: " ++ (show $ (Set.map) ((Grafica.nombre).vertice) $ alloc $ cache e) ++ "\n") ++ 
         ("cola: " ++ (show $ Prelude.map ((Grafica.nombre).vertice) $ cola e)) ++ "\n - - "
     -- el motorcito
-    case (accion x) of
+    res <- (case (accion x) of
         GENERA -> 
             -- Crea el nuevo identificador en memoria
             proceso (agregar e (Right grafica) x f) (Right grafica) xs f 
@@ -81,8 +81,8 @@ proceso e (Right grafica) (x:xs) f = do
             (if (en_memoria $ mem e) (Sesion.nombre x) 
                    then proceso e (Right grafica) xs f -- no pasa nada, avanza la sesión
                    -- sube del caché a la memoria el dato consultado 
-                   else proceso (subir e (Right grafica) x f) (Right grafica) xs f) 
-    return ()
+                   else proceso (subir e (Right grafica) x f) (Right grafica) xs f) )
+    return (res)
 
 -- paso es parecido a proceso, pero con diferente función.
 -- Regresa Estado, no IO (). No despliega, es solamente el motor.  
@@ -183,7 +183,7 @@ ordentam :: Encolamiento
 ordentam xs x = menores ++ (x:mayores) where
     (menores, mayores) = break (\k -> tam (vertice k) > tam (vertice x)) xs
 
-main :: IO ()
+main :: IO (Estado)
 main = do
     let
         -- los dos niveles de memoria.
@@ -193,4 +193,4 @@ main = do
     sesion <- archivo_a_sesion "rubik.gap" -- sesion :: [Identificador]
     resultado <- proceso (Estado (0,0,0) [] l0 l1) grafica sesion fifo   
     --resultado <- proceso (Estado [] l0 l1) grafica sesion ordentam   
-    return ()
+    return (resultado)

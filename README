@@ -1,0 +1,42 @@
+El archivo "rubik.gap" es http://www.gap-system.org/Doc/Examples/rubik.in modificado para
+que haya siempre espacios alrededor de ";", ":=", "=", y que no haya ";" dobles.
+
+"datos" es la salida de una sesión de GAP, modificado para almacenar los objetos que 
+crea y las relaciones entre ellos e imprimirlos cuando GAP finaliza. Hace falta una versión
+modificada de GAP para crear archivos "datos" para una sesión arbitraria; no he publicado
+aún las modificaciones.
+
+El formato de salida es
+
+- - -
+(5,14,464)
+"cube1" 36/6 INVOCA N
+memoria: fromList ["cmpl2","cube","cube2","cube2b"]
+cache: fromList ["blockhom1","blockhom2","cmpl1","corners","cube1","cube1b","edges","orbits"]
+cola: ["cube","cmpl2","cube2","cube2b"]
+ - - 
+
+donde:
+
+* El triple en la primera línea es el número de fallos, número de desalojos, y la transferencia
+  total, respectivamente.
+
+* La segunda línea contiene:  
+** El nombre del siguiente identificador en la sesión
+** El tamaño del objeto asociado al identificador / la memoria principal libre
+** El comando, indica si se va a crear un objeto nuevo o si se lee uno existente
+** Y si el objeto asociado al identificador se encuentra en memoria, N en otro caso
+
+* "memoria" y "cache" son conjuntos (sin orden) de los identificadores actualmente
+  en memoria y en caché, respectivamente.
+
+* "cola" es una lista ordenada de los identificadores de los objetos en el orden que serán 
+  desalojados; el identificador más a la derecha es el siguiente que se intentará desalojar
+  si un objeto debe ser ingresado a la memoria y la memoria no tiene espacio libre suficiente.
+
+La función "main" regresa un Estado, que consiste en:
+
+* El total final de fallos, desalojos y transferencia
+* El estado final de la cola
+* El estado final de la memoria
+* El estado final del caché

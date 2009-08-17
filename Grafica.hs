@@ -1,6 +1,6 @@
 {-
 
-gapsim.hs
+Grafica.hs
 ---------
 
 Copyright (c) 2009, Jaime Soffer

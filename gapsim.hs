@@ -243,10 +243,10 @@ disc_tam :: Encolamiento
 disc_tam xs x = menores ++ (x:mayores) where
     (menores, mayores) = break (\k -> tam (vertice k) > tam (vertice x)) xs
 
--- solo profundidad
+-- solo profundidad (menos profundo primero)
 disc_depth :: Encolamiento
 disc_depth xs x = menores ++ (x:mayores) where
-    (menores, mayores) = break (\k -> depth k > depth x) xs
+    (menores, mayores) = break (\k -> depth k < depth x) xs
 
 -- primero por tamaño, luego por profundidad
 disc_tam_depth :: Encolamiento
@@ -254,14 +254,14 @@ disc_tam_depth xs x = menores ++ (x:mayores) where
     (menores, mayores) = 
         break (\k -> tam (vertice k) >= tam (vertice x) &&
             if tam (vertice k) == tam (vertice x) 
-            then depth k > depth x
+            then depth k < depth x
             else True) xs
 
 -- primero profundidad, luego tamaño
 disc_depth_tam :: Encolamiento
 disc_depth_tam xs x = menores ++ (x:mayores) where
     (menores, mayores) = 
-        break (\k -> depth k >= depth x &&
+        break (\k -> depth k <= depth x &&
             if depth k == depth x
             then tam (vertice k) > tam (vertice x) 
             else True) xs

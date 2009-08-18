@@ -102,6 +102,7 @@ proceso _ (Left _) _ _ _ = error "El parse de la gráfica ha fallado"
 proceso e _ [] _ _ = return e
 proceso e (Right grafica) (x:xs) f lru = do
     -- debug; muestra cosas, no es tan complicado como parece.
+    {-
     putStrLn $ 
         "- - -\n" ++ (show $ stats e) ++ "\n" ++
         (show $ Sesion.nombre x) ++ " " ++ 
@@ -111,6 +112,7 @@ proceso e (Right grafica) (x:xs) f lru = do
         ("memoria: " ++ (show $ (Set.map) ((Grafica.nombre).vertice) $ alloc $ mem e) ++ "\n") ++
         ("cache: " ++ (show $ (Set.map) ((Grafica.nombre).vertice) $ alloc $ cache e) ++ "\n") ++ 
         ("cola: " ++ (show $ Prelude.map ((Grafica.nombre).vertice) $ cola e)) ++ "\n - - "
+    -}
     -- el motorcito
     res <- (case (accion x) of
         GENERA -> 
@@ -236,20 +238,43 @@ agregar e (Right grafica) y f lru = let x = encuentra grafica (Sesion.nombre y) 
 fifo :: Encolamiento
 fifo xs x = (x:xs)
 
--- el más grande va a estar al frente de la cola siempre
--- no olvidar: el frente es "last"
-ordentam :: Encolamiento
-ordentam xs x = menores ++ (x:mayores) where
+-- solo tamaño
+disc_tam :: Encolamiento
+disc_tam xs x = menores ++ (x:mayores) where
     (menores, mayores) = break (\k -> tam (vertice k) > tam (vertice x)) xs
 
-main :: IO (Estado)
-main = do
+-- solo profundidad
+disc_depth :: Encolamiento
+disc_depth xs x = menores ++ (x:mayores) where
+    (menores, mayores) = break (\k -> depth k > depth x) xs
+
+-- primero por tamaño, luego por profundidad
+disc_tam_depth :: Encolamiento
+disc_tam_depth xs x = menores ++ (x:mayores) where
+    (menores, mayores) = 
+        break (\k -> tam (vertice k) >= tam (vertice x) &&
+            if tam (vertice k) == tam (vertice x) 
+            then depth k > depth x
+            else True) xs
+
+-- primero profundidad, luego tamaño
+disc_depth_tam :: Encolamiento
+disc_depth_tam xs x = menores ++ (x:mayores) where
+    (menores, mayores) = 
+        break (\k -> depth k >= depth x &&
+            if depth k == depth x
+            then tam (vertice k) > tam (vertice x) 
+            else True) xs
+
+
+run :: Encolamiento -> Bool -> IO (Estadisticas)
+run f lru = do
     let
         -- los dos niveles de memoria.
         l0 = Memoria (Set.empty :: Set Objeto) 130 -- es espacio libre al iniciar
         l1 = Memoria (Set.empty :: Set Objeto) 5000
     grafica <- archivo_a_grafica "datos" -- grafica :: Either ParseError (Set Objeto)
     sesion <- archivo_a_sesion "rubik.gap" -- sesion :: [Identificador]
-    resultado <- proceso (Estado (0,0,0) [] l0 l1) grafica sesion fifo True
+    resultado <- proceso (Estado (0,0,0) [] l0 l1) grafica sesion f lru
     --resultado <- proceso (Estado [] l0 l1) grafica sesion ordentam   
-    return (resultado)
+    return (stats resultado)

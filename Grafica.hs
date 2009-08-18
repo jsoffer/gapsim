@@ -113,7 +113,16 @@ objetos :: (Set Relacion, Set Vertice) -> Set Objeto
 objetos (rels, verts) = fromList lista_objetos where
     lista_objetos = [ Objeto v a | 
         v <- (elems verts), 
-        let a = Set.map desde $ Set.filter (\k -> nombre v == hasta k ) rels ]
+        let a = Set.map desde $ Set.filter (\k -> nombre v == hasta k  && desde k /= hasta k) rels ]
+
+profundidad :: Set Relacion -> String -> Integer
+profundidad rels x = 
+    if Prelude.null ancestros 
+    then 0 
+    else (minimum $ Prelude.map (profundidad rels) ancestros) + 1 where
+        -- todos los nombres en "desde" que tengan a x como "hasta"
+        ancestros :: [String]
+        ancestros = [ desde r | r <- toList rels, desde r /= x, hasta r == x ] --(???) rels  
 
 -- la entrada es el nombre del archivo
 archivo_a_grafica :: String -> IO (Either ParseError (Set Objeto))
@@ -123,3 +132,11 @@ archivo_a_grafica x = do
     return $ case tr of
         (Left x) -> Left x
         (Right x) -> Right (objetos x)
+
+archivo_a_p :: String -> IO (Either ParseError [(String, Integer)])
+archivo_a_p x = do
+    f <- readFile x
+    let tr = parse archivo "" f
+    return $ case tr of
+        (Left x) -> Left x
+        (Right (rels, verts)) -> Right $ zip (toList $ Set.map nombre verts) (Prelude.map (profundidad rels) $ toList $ Set.map nombre verts)

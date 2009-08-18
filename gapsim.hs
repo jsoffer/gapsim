@@ -63,7 +63,11 @@ data Memoria = Memoria { alloc :: (Set Objeto), memfree :: Integer } deriving (S
 type Cola = [Objeto]
 type Grafica = Either ParseError (Set Objeto)
 type Sesion = [Identificador]
-type Encolamiento = (Cola -> Objeto -> Cola)
+
+-- Una función que agregue un objeto a una cola,
+type Encolamiento = Cola -> Objeto -> Cola 
+-- después el tipo necesita un bool que diga si o no se aplica LRU, i.e. si restaura 
+-- la cola en caso de invocación
 
 -- misses, desalojos, total de bits transferidos
 type Estadisticas = (Integer, Integer, Integer)
@@ -93,10 +97,10 @@ encuentra g s = if Prelude.null xs then error $ (show s)  ++ ": no existe en gra
 
 -- Gráfica y Encolamiento son estáticos (nunca cambian); Sesión solamente avanza.
 -- Todos los cambios se almacenan en Estado.
-proceso :: Estado -> Grafica -> Sesion -> Encolamiento -> IO (Estado)
-proceso _ (Left _) _ _  = error "El parse de la gráfica ha fallado"
-proceso e _ [] _ = return e
-proceso e (Right grafica) (x:xs) f = do
+proceso :: Estado -> Grafica -> Sesion -> Encolamiento -> Bool -> IO (Estado)
+proceso _ (Left _) _ _ _ = error "El parse de la gráfica ha fallado"
+proceso e _ [] _ _ = return e
+proceso e (Right grafica) (x:xs) f lru = do
     -- debug; muestra cosas, no es tan complicado como parece.
     putStrLn $ 
         "- - -\n" ++ (show $ stats e) ++ "\n" ++
@@ -111,12 +115,14 @@ proceso e (Right grafica) (x:xs) f = do
     res <- (case (accion x) of
         GENERA -> 
             -- Crea el nuevo identificador en memoria
-            proceso (agregar e (Right grafica) x f) (Right grafica) xs f 
+            proceso (agregar e (Right grafica) x f lru) (Right grafica) xs f lru
         INVOCA -> 
             (if (en_memoria $ mem e) (Sesion.nombre x) 
-                   then proceso e (Right grafica) xs f -- no pasa nada, avanza la sesión
+                   -- sin LRU no pasa nada, avanza la sesión
+                   -- con LRU actualiza la cola
+                   then proceso (reestablece_en_cola e (Sesion.nombre x) lru) (Right grafica) xs f lru
                    -- sube del caché a la memoria el dato consultado 
-                   else proceso (subir e (Right grafica) x f) (Right grafica) xs f) )
+                   else proceso (subir e (Right grafica) x f lru) (Right grafica) xs f lru) )
     return (res)
 
 -- paso es parecido a proceso, pero con diferente función.
@@ -125,15 +131,33 @@ proceso e (Right grafica) (x:xs) f = do
 -- operan dentro de IO (subir, agregar). 
 -- No puede ser agregado a proceso para sustituir al motor, porque 
 -- proceso se invoca a sí mismo, paso es solamente un paso.
-paso :: Estado -> Grafica -> Identificador -> Encolamiento -> Estado
-paso e (Right grafica) x f = 
+paso :: Estado -> Grafica -> Identificador -> Encolamiento -> Bool -> Estado
+paso e (Right grafica) x f lru = 
     case (accion x) of
         GENERA -> 
-            agregar e (Right grafica) x f -- guarda el nuevo elemento
+            agregar e (Right grafica) x f lru -- guarda el nuevo elemento
         INVOCA -> 
-            (if (en_memoria $ mem e) (Sesion.nombre x) 
-                   then e -- no pasa nada, avanza la sesión
-                   else subir e (Right grafica) x f) -- caché -> memoria
+            (if (en_memoria $ mem e) (Sesion.nombre x)
+                   -- sin LRU no pasa nada, avanza la sesión
+                   -- con LRU actualiza la cola
+                   then (reestablece_en_cola e (Sesion.nombre x) lru)
+                   else subir e (Right grafica) x f lru) -- caché -> memoria
+
+-- si LRU, entonces busca el objeto con nombre x en la cola, lo retira y lo pone al final
+reestablece_en_cola :: Estado -> String -> Bool -> Estado
+reestablece_en_cola e x lru =
+    if lru 
+    then Estado s q m c 
+    else e where
+        s = stats e
+        q = case elemento of 
+            Nothing ->  cola e
+            Just _ -> (y:zs) ++ ys -- FIXME
+        m = mem e
+        c = cache e
+        -- tal vez poner los dos no es necesario (¿son lo mismo?)
+        elemento = find (\k -> x == (Grafica.nombre (vertice k))) (cola e)
+        (zs, (y:ys)) = break (\k -> x == (Grafica.nombre (vertice k))) (cola e)
 
 subiendo :: Integer -> Estadisticas -> Estadisticas
 subiendo tam (a,b,c) = (a+1, b, c+tam)
@@ -143,11 +167,11 @@ bajando tam (a,b,c) = (a, b+1, c+tam)
 
 -- sube un objeto del caché a memoria principal
 -- 
-subir :: Estado -> Grafica -> Identificador -> Encolamiento -> Estado 
-subir e (Right grafica) y f =
+subir :: Estado -> Grafica -> Identificador -> Encolamiento -> Bool -> Estado 
+subir e (Right grafica) y f lru =
     if (memfree $ mem e) >= (tam $ vertice x)  
     then Estado (subiendo bits (stats e)) q m c
-    else paso (desalojar e) (Right grafica) y f where
+    else paso (desalojar e) (Right grafica) y f lru where
         x = encuentra (alloc $ cache e) (Sesion.nombre y)
         -- si elemento == False, intentamos subir algo que no estáien caché. 
         -- Pero lo necesitamos. Salir.
@@ -188,8 +212,8 @@ desalojar e = Estado (bajando bits (stats e)) q m c where
     a = Set.insert x (alloc $ cache e) 
     s = ((memfree $ cache e) - (tam $ vertice x)) 
 
-agregar :: Estado -> Grafica -> Identificador -> Encolamiento -> Estado
-agregar e (Right grafica) y f = let x = encuentra grafica (Sesion.nombre y) in
+agregar :: Estado -> Grafica -> Identificador -> Encolamiento -> Bool -> Estado
+agregar e (Right grafica) y f lru = let x = encuentra grafica (Sesion.nombre y) in
                 if ((memfree (mem e)) >= (tam $ vertice x)) -- si cabe
                 then
                     -- haz una memoria con el nuevo elemento
@@ -199,7 +223,7 @@ agregar e (Right grafica) y f = let x = encuentra grafica (Sesion.nombre y) in
                                     ((memfree (mem e)) - (tam $ vertice x))) 
                                     (cache e) 
                 -- si no, mueve algo de mem a cache, y corre el mismo comando.
-                else paso (desalojar e) (Right grafica) y f 
+                else paso (desalojar e) (Right grafica) y f lru
 
 -- Los encolamientos agregan al principio de la lista y leen y desencolan del final.
 -- Por lo tanto, agregar requiere tiempo constante, retirar tiempo lineal.
@@ -226,6 +250,6 @@ main = do
         l1 = Memoria (Set.empty :: Set Objeto) 5000
     grafica <- archivo_a_grafica "datos" -- grafica :: Either ParseError (Set Objeto)
     sesion <- archivo_a_sesion "rubik.gap" -- sesion :: [Identificador]
-    resultado <- proceso (Estado (0,0,0) [] l0 l1) grafica sesion fifo   
+    resultado <- proceso (Estado (0,0,0) [] l0 l1) grafica sesion fifo True
     --resultado <- proceso (Estado [] l0 l1) grafica sesion ordentam   
     return (resultado)

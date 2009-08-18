@@ -42,7 +42,7 @@ data Relacion = Relacion { desde :: String, hasta :: String } deriving (Show, Or
 data Vertice = Vertice { nombre :: String, tam :: Integer } deriving (Show, Ord, Eq)
 
 -- mal nombre (renombrar)
-data Objeto = Objeto { vertice :: Vertice, antecesores :: Set String } deriving (Show, Ord, Eq)
+data Objeto = Objeto { vertice :: Vertice, antecesores :: Set String, depth :: Integer } deriving (Show, Ord, Eq)
 
 encabezado :: Parser ()
 encabezado = do
@@ -111,10 +111,11 @@ archivo = do
 
 objetos :: (Set Relacion, Set Vertice) -> Set Objeto
 objetos (rels, verts) = fromList lista_objetos where
-    lista_objetos = [ Objeto v a | 
+    lista_objetos = [ Objeto v a (profundidad rels (nombre v)) | 
         v <- (elems verts), 
         let a = Set.map desde $ Set.filter (\k -> nombre v == hasta k  && desde k /= hasta k) rels ]
 
+-- algo torpe, hace el trabajo bien
 profundidad :: Set Relacion -> String -> Integer
 profundidad rels x = 
     if Prelude.null ancestros 
@@ -122,7 +123,7 @@ profundidad rels x =
     else (minimum $ Prelude.map (profundidad rels) ancestros) + 1 where
         -- todos los nombres en "desde" que tengan a x como "hasta"
         ancestros :: [String]
-        ancestros = [ desde r | r <- toList rels, desde r /= x, hasta r == x ] --(???) rels  
+        ancestros = [ desde r | r <- toList rels, desde r /= x, hasta r == x ]   
 
 -- la entrada es el nombre del archivo
 archivo_a_grafica :: String -> IO (Either ParseError (Set Objeto))

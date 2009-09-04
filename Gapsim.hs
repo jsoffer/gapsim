@@ -30,6 +30,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 -}
 
+module Gapsim (run, fifo, disc_tam, disc_depth, disc_tam_depth, disc_depth_tam) where
+
 import Grafica
 import Sesion
 
@@ -91,16 +93,16 @@ en_memoria m x = let res = DL.find (\k -> Grafica.nombre (vertice k) == x) $ ele
 -- Regresa el primer objeto de la gráfica con nombre s que encuentre
 -- En realidad no debe haber más que uno en toda la gráfica
 encuentra :: Set Objeto -> String -> Objeto
-encuentra g s = if Prelude.null xs then error $ (show s)  ++ ": no existe en grafica" else head xs 
+encuentra g s = if Prelude.null xs then error $ show s ++ ": no existe en grafica" else head xs 
     where
-        xs = Set.toList $ Set.filter (\k -> (Grafica.nombre $ vertice k) == s)  g
+        xs = Set.toList $ Set.filter (\k -> Grafica.nombre (vertice k) == s)  g
 
 -- Gráfica y Encolamiento son estáticos (nunca cambian); Sesión solamente avanza.
 -- Todos los cambios se almacenan en Estado.
 proceso :: Estado -> Grafica -> Sesion -> Encolamiento -> Bool -> IO (Estado)
 proceso _ (Left _) _ _ _ = error "El parse de la gráfica ha fallado"
 proceso e _ [] _ _ = return e
-proceso e (Right grafica) (x:xs) f lru = do
+proceso e (Right grafica) (x:xs) f lru = -- do
     -- debug; muestra cosas, no es tan complicado como parece.
     {-
     putStrLn $ 
@@ -114,7 +116,8 @@ proceso e (Right grafica) (x:xs) f lru = do
         ("cola: " ++ (show $ Prelude.map ((Grafica.nombre).vertice) $ cola e)) ++ "\n - - "
     -}
     -- el motorcito
-    res <- (case (accion x) of
+    --res <- (case (accion x) of
+    case (accion x) of
         GENERA -> 
             -- Crea el nuevo identificador en memoria
             proceso (agregar e (Right grafica) x f lru) (Right grafica) xs f lru
@@ -124,8 +127,8 @@ proceso e (Right grafica) (x:xs) f lru = do
                    -- con LRU actualiza la cola
                    then proceso (reestablece_en_cola e (Sesion.nombre x) lru) (Right grafica) xs f lru
                    -- sube del caché a la memoria el dato consultado 
-                   else proceso (subir e (Right grafica) x f lru) (Right grafica) xs f lru) )
-    return (res)
+                   else proceso (subir e (Right grafica) x f lru) (Right grafica) xs f lru)
+    --return res
 
 -- paso es parecido a proceso, pero con diferente función.
 -- Regresa Estado, no IO (). No despliega, es solamente el motor.  
@@ -142,7 +145,7 @@ paso e (Right grafica) x f lru =
             (if (en_memoria $ mem e) (Sesion.nombre x)
                    -- sin LRU no pasa nada, avanza la sesión
                    -- con LRU actualiza la cola
-                   then (reestablece_en_cola e (Sesion.nombre x) lru)
+                   then reestablece_en_cola e (Sesion.nombre x) lru
                    else subir e (Right grafica) x f lru) -- caché -> memoria
 
 -- si LRU, entonces busca el objeto con nombre x en la cola, lo retira y lo pone al final
@@ -158,8 +161,8 @@ reestablece_en_cola e x lru =
         m = mem e
         c = cache e
         -- tal vez poner los dos no es necesario (¿son lo mismo?)
-        elemento = find (\k -> x == (Grafica.nombre (vertice k))) (cola e)
-        (zs, (y:ys)) = break (\k -> x == (Grafica.nombre (vertice k))) (cola e)
+        elemento = find (\k -> x == Grafica.nombre (vertice k)) (cola e)
+        (zs, (y:ys)) = break (\k -> x == Grafica.nombre (vertice k)) (cola e)
 
 subiendo :: Integer -> Estadisticas -> Estadisticas
 subiendo tam (a,b,c) = (a+1, b, c+tam)
@@ -171,7 +174,7 @@ bajando tam (a,b,c) = (a, b+1, c+tam)
 -- 
 subir :: Estado -> Grafica -> Identificador -> Encolamiento -> Bool -> Estado 
 subir e (Right grafica) y f lru =
-    if (memfree $ mem e) >= (tam $ vertice x)  
+    if memfree (mem e) >= tam (vertice x)  
     then Estado (subiendo bits (stats e)) q m c
     else paso (desalojar e) (Right grafica) y f lru where
         x = encuentra (alloc $ cache e) (Sesion.nombre y)
@@ -182,12 +185,12 @@ subir e (Right grafica) y f lru =
         bits = if elemento then tam $ vertice x else 0
         m = if elemento 
             then Memoria a s 
-            else error $ (show x) ++ "no en cache, no puede subir" --mem e
+            else error $ show x ++ "no en cache, no puede subir" --mem e
         c = if elemento 
-            then Memoria (Set.delete x $ alloc $ cache e) ((memfree $ cache e) + (tam $ vertice x)) 
-            else error $ (show x) ++ "no en cache, no puede subir" --cache e  
+            then Memoria (Set.delete x $ alloc $ cache e) (memfree (cache e) + tam (vertice x)) 
+            else error $ show x ++ "no en cache, no puede subir" --cache e  
         a = Set.insert x (alloc $ mem e) 
-        s = ((memfree $ mem e) - (tam $ vertice x)) 
+        s = memfree (mem e) - tam (vertice x) 
 
 -- A partir de un estado, devuelve otro en el que, hipotéticamente, 
 -- hay un poco más de memoria.
@@ -206,24 +209,24 @@ desalojar e = Estado (bajando bits (stats e)) q m c where
     elemento = member x $ alloc $ mem e
     bits = if elemento then tam $ vertice x else 0
     m = if elemento 
-        then Memoria (Set.delete x $ alloc $ mem e) ((memfree $ mem e) + (tam $ vertice x)) 
+        then Memoria (Set.delete x $ alloc $ mem e) (memfree (mem e) + tam (vertice x)) 
         else mem e
     c = if elemento 
         then Memoria a s 
         else cache e
     a = Set.insert x (alloc $ cache e) 
-    s = ((memfree $ cache e) - (tam $ vertice x)) 
+    s = memfree (cache e) - tam (vertice x) 
 
 agregar :: Estado -> Grafica -> Identificador -> Encolamiento -> Bool -> Estado
 agregar e (Right grafica) y f lru = let x = encuentra grafica (Sesion.nombre y) in
-                if ((memfree (mem e)) >= (tam $ vertice x)) -- si cabe
+                if memfree (mem e) >= tam (vertice x) -- si cabe
                 then
                     -- haz una memoria con el nuevo elemento
                     Estado (stats e)
                            (f (cola e) x) 
                            (Memoria (Set.insert x (alloc (mem e))) 
-                                    ((memfree (mem e)) - (tam $ vertice x))) 
-                                    (cache e) 
+                                    (memfree (mem e) - tam (vertice x))) 
+                           (cache e) 
                 -- si no, mueve algo de mem a cache, y corre el mismo comando.
                 else paso (desalojar e) (Right grafica) y f lru
 
@@ -236,7 +239,7 @@ agregar e (Right grafica) y f lru = let x = encuentra grafica (Sesion.nombre y) 
 
 -- Primero en entrar, primero en salir.
 fifo :: Encolamiento
-fifo xs x = (x:xs)
+fifo xs x = x : xs
 
 -- solo tamaño
 disc_tam :: Encolamiento
@@ -278,3 +281,9 @@ run f lru = do
     resultado <- proceso (Estado (0,0,0) [] l0 l1) grafica sesion f lru
     --resultado <- proceso (Estado [] l0 l1) grafica sesion ordentam   
     return (stats resultado)
+
+{-
+main :: IO ()
+main = do
+    run fifo True >>= (\k -> putStrLn $ show k)
+-}

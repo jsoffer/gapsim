@@ -1,0 +1,23 @@
+Name:                gapsim
+Version:             0.1
+Synopsis:            Analyze GAP memory structures
+Description:         Analyze GAP memory structures
+Category:            Development
+License:             BSD3
+Copyright:           (c) Jaime Soffer
+Author:              Jaime Soffer
+Maintainer:          jaime.soffer@gmail.com
+Cabal-Version:       >= 1.2
+Build-Type:          Simple
+Tested-With:         GHC==6.10.4
+build-Depends:       base
+
+Executable gapsim {
+
+    Main-Is:            Main.hs
+    Other-Modules:      Gapsim, Grafica, Sesion
+    Ghc-Options:        -Wall
+    Ghc-Prof-Options:   -auto-all
+
+    Build-Depends:      base, containers, parsec
+}

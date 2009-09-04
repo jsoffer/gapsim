@@ -69,9 +69,9 @@ par = do
     return $ Relacion desde hasta
 
 lista_pares :: Parser ([Relacion])
-lista_pares = do
-    r <- many par
-    return r
+lista_pares = many par
+    -- r <- many par
+    -- return r
 
 elemento :: Parser Vertice
 elemento = do
@@ -90,8 +90,9 @@ s_cola :: Parser [Vertice]
 s_cola = do
     string "(cola"
     manyTill (char ' ') newline
-    r <- manyTill elemento (char ')')
-    return r
+    manyTill elemento (char ')')
+    --r <- manyTill elemento (char ')')
+    --return r
 
 archivo :: Parser (Set Relacion, Set Vertice)
 archivo = do
@@ -112,7 +113,7 @@ archivo = do
 objetos :: (Set Relacion, Set Vertice) -> Set Objeto
 objetos (rels, verts) = fromList lista_objetos where
     lista_objetos = [ Objeto v a (profundidad rels (nombre v)) | 
-        v <- (elems verts), 
+        v <- elems verts, 
         let a = Set.map desde $ Set.filter (\k -> nombre v == hasta k  && desde k /= hasta k) rels ]
 
 -- algo torpe, hace el trabajo bien
@@ -120,7 +121,7 @@ profundidad :: Set Relacion -> String -> Integer
 profundidad rels x = 
     if Prelude.null ancestros 
     then 0 
-    else (minimum $ Prelude.map (profundidad rels) ancestros) + 1 where
+    else minimum (Prelude.map (profundidad rels) ancestros) + 1 where
         -- todos los nombres en "desde" que tengan a x como "hasta"
         ancestros :: [String]
         ancestros = [ desde r | r <- toList rels, desde r /= x, hasta r == x ]   

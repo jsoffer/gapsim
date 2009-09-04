@@ -48,7 +48,7 @@ splitOn :: (a -> Bool) -> [a] -> [[a]]
 splitOn _ [] = []
 splitOn f l@(x:xs)
     | f x = splitOn f xs
-    | otherwise = let (h,t) = break f l in h:(splitOn f t)
+    | otherwise = let (h,t) = break f l in h : splitOn f t
 
 es_alfanum :: Char -> Bool
 es_alfanum x = elem x (['a'..'z']++['A'..'Z']++['0'..'9'])
@@ -59,7 +59,7 @@ es_alfanum x = elem x (['a'..'z']++['A'..'Z']++['0'..'9'])
 -- Se debe revisar la sesión a mano antes de comenzar.
 
 analiza :: String -> [String]
-analiza = splitOn (\k -> not ((es_alfanum k) || elem k ";:=\""))
+analiza = splitOn (\k -> not (es_alfanum k || elem k ";:=\""))
 
 -- Si encuentra un identificador (no es vacío y empieza con minúscula) construye
 -- un Identificador y lo agrega a la lista de salida. Si el elemento siguiente 
@@ -73,18 +73,22 @@ crea l =  concat final where
     final = map construye parcial
     parcial = sublistas filtrado
     -- "in" es palabra clave
-    filtrado = filter (\(k:ks) -> (k:ks) /= "in" && (elem k ['a'..'z']) || (k:ks) == ";" || (k:ks) == ":=") nonulos
+    filtrado = filter (\ (k:ks) -> (k:ks) /= "in" && (elem k ['a'..'z'] || (k:ks) == ";" || (k:ks) == ":=")) nonulos
     nonulos = filter (not.null) l
     sublistas :: [String] -> [[String]]
     sublistas = splitOn (==";")
     construye :: [String] -> [Identificador]
     construye [] = []
-    construye (x:":=":xs) = (construye xs)++[(Identificador x GENERA)]
-    construye (x:xs) = (Identificador x INVOCA):(construye xs)
+    construye (x:":=":xs) = construye xs ++ [Identificador x GENERA]
+    construye (x:xs) = Identificador x INVOCA : construye xs
 
 muestra :: [Identificador] -> String
+muestra = foldr (\ x -> (++) (nombre x ++ " " ++ show (accion x) ++ "\n")) "" 
+
+{-
 muestra [] = ""
 muestra (x:xs) = ((nombre x) ++ " " ++ (show (accion x)) ++ "\n") ++ (muestra xs)
+-}
 
 archivo_a_sesion :: String -> IO [Identificador]
 archivo_a_sesion x = do
@@ -92,10 +96,12 @@ archivo_a_sesion x = do
     let tr = crea $ analiza f
     return tr
 
--- creo que la única forma de encadenar un Monad IO es que el destino sea IO
+-- Para encadenar un Monad IO es el destino debe ser IO
 muestraM :: [Identificador] -> IO ()
-muestraM xs = do
+muestraM = putStrLn . muestra 
+    {-
     let foo [] = ""
-        foo (x:xs) = ((nombre x) ++ " " ++ (show (accion x)) ++ "\n") ++ (muestra xs)
+        foo (x:xs) = (nombre x ++ " " ++ show (accion x) ++ "\n") ++ muestra xs
         tr = xs
     putStrLn $ foo tr
+    -}
